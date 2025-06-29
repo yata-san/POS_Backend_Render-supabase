@@ -166,5 +166,28 @@ uvicorn app:app --reload
 - **ポートエラー**: Renderでは自動的に `$PORT` 環境変数が設定される
 - **SSL エラー**: Supabaseは自動的にSSLを処理するため、追加設定不要
 
+### Python 3.13 互換性問題
+**症状**: `ImportError: undefined symbol: _PyInterpreterState_Get`
+
+**原因**: 
+- `psycopg2-binary` がPython 3.13と互換性がない
+- `runtime.txt` が正しく読み込まれていない
+
+**対策**:
+1. **`runtime.txt` の確認**: 余分なスペースや改行がないことを確認
+   ```
+   python-3.12.8
+   ```
+
+2. **psycopg2-binary のアップデート**: 最新版を使用
+   ```
+   psycopg2-binary==2.9.10
+   ```
+
+3. **代替案**: psycopg3 を使用
+   ```
+   psycopg[binary]==3.2.3
+   ```
+
 ### ログの確認
 Renderダッシュボードの "Logs" タブでエラーを確認できます。 
