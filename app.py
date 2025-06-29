@@ -3,20 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
 import json
-# from db_control import crud, mymodels
+import os
 from db_control import crud, mymodels
-# MySQLのテーブル作成
-# from db_control.create_tables import init_db
-
-# # アプリケーション初期化時にテーブルを作成
-# init_db()
-
-
-class Customer(BaseModel):
-    customer_id: str
-    customer_name: str
-    age: int
-    gender: str
+from typing import List
+from sqlalchemy import text
+from db_control.connect_supabase import engine
 
 
 app = FastAPI()
@@ -35,57 +26,65 @@ def index():
     return {"message": "FastAPI top page!"}
 
 
-@app.post("/customers")
-def create_customer(customer: Customer):
-    values = customer.dict()
-    tmp = crud.myinsert(mymodels.Customers, values)
-    result = crud.myselect(mymodels.Customers, values.get("customer_id"))
-
-    if result:
-        result_obj = json.loads(result)
-        return result_obj if result_obj else None
-    return None
-
-
-@app.get("/customers")
-def read_one_customer(customer_id: str = Query(...)):
-    result = crud.myselect(mymodels.Customers, customer_id)
+@app.get("/items")
+def read_one_item(code: str = Query(...)):
+    # prd_masterテーブルを参照
+    result = crud.myselect(mymodels.PrdMaster, code, key_name="CODE")
     if not result:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    result_obj = json.loads(result)
-    return result_obj[0] if result_obj else None
-
-@app.get("/allcustomers")
-def read_all_customer():
-    result = crud.myselectAll(mymodels.Customers)
-    # 結果がNoneの場合は空配列を返す
-    if not result:
-        return []
-    # JSON文字列をPythonオブジェクトに変換
-    return json.loads(result)
-
-
-@app.put("/customers")
-def update_customer(customer: Customer):
-    values = customer.dict()
-    values_original = values.copy()
-    tmp = crud.myupdate(mymodels.Customers, values)
-    result = crud.myselect(mymodels.Customers, values_original.get("customer_id"))
-    if not result:
-        raise HTTPException(status_code=404, detail="Customer not found")
+        raise HTTPException(status_code=404, detail="Item not found")
     result_obj = json.loads(result)
     return result_obj[0] if result_obj else None
 
 
-@app.delete("/customers")
-def delete_customer(customer_id: str = Query(...)):
-    result = crud.mydelete(mymodels.Customers, customer_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    return {"customer_id": customer_id, "status": "deleted"}
+class CartItem(BaseModel):
+    CODE: str
+    NAME: str
+    PRICE: int
+    PRD_ID: int
+    qty: int
 
+class PurchaseRequest(BaseModel):
+    items: List[CartItem]
+    subtotal: int
+    total: int
 
-@app.get("/fetchtest")
-def fetchtest():
-    response = requests.get('https://jsonplaceholder.typicode.com/users')
-    return response.json()
+@app.post("/purchase")
+def purchase(req: PurchaseRequest):
+    with engine.begin() as conn:
+        # 1. trd_headerにINSERT (PostgreSQL用にRETURNINGを使用)
+        result = conn.execute(
+            text(
+                "INSERT INTO trd_header (total_amt, total_amt_ex_tax) VALUES (:total_amt, :total_amt_ex_tax) RETURNING trd_id"
+            ),
+            {"total_amt": req.total, "total_amt_ex_tax": req.subtotal}
+        )
+        trd_id = result.fetchone()[0]
+
+        # 2. trd_detailに商品ごとにINSERT
+        for idx, item in enumerate(req.items, start=1):
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO trd_detail
+                    (trd_id, dtl_id, prd_id, prd_code, prd_name, prd_price, quantity)
+                    VALUES
+                    (:trd_id, :dtl_id, :prd_id, :prd_code, :prd_name, :prd_price, :quantity)
+                    """
+                ),
+                {
+                    "trd_id": trd_id,
+                    "dtl_id": idx,
+                    "prd_id": item.PRD_ID,
+                    "prd_code": item.CODE,
+                    "prd_name": item.NAME,
+                    "prd_price": item.PRICE,
+                    "quantity": item.qty
+                }
+            )
+    return {"status": "success", "trd_id": trd_id}
+
+# Render用のポート設定
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
