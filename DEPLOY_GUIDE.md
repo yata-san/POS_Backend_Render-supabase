@@ -163,27 +163,40 @@ uvicorn app:app --reload
 
 ### データベース接続エラー（重要）
 
-**症状**: `Network is unreachable` エラー、IPv6接続問題
+**症状1**: `Network is unreachable` エラー、IPv6接続問題
 ```
 connection to server at "db.miwoocobzxzuzhdkzsbg.supabase.co" (2406:da14:271:9903:99ac:87a9:1e53:a9d7), port 5432 failed: Network is unreachable
+```
+
+**症状2**: SQLAlchemyダイアレクトエラー
+```
+sqlalchemy.exc.NoSuchModuleError: Can't load plugin: sqlalchemy.dialects:postgres
+```
+
+**症状3**: パスワード認証エラー
+```
+error received from server in SCRAM exchange: Wrong password
 ```
 
 **原因**: 
 1. RenderでIPv6接続がサポートされていない
 2. 環境変数が正しく設定されていない
 3. Supabaseの接続設定に問題がある
+4. SQLAlchemy 2.0で`postgres://`プロトコルが非推奨になっている
+5. データベースパスワードが間違っている、または正しく設定されていない
 
 **対策**:
 1. **正しいDATABASE_URLの設定**
    - Supabaseダッシュボード → Settings → Database → Connection Pooling
    - **Transaction mode** を選択し、Connection stringをコピー
    ```
-   postgres://postgres.xxx:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres
+   postgresql://postgres.xxx:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres
    ```
+   **重要**: `postgres://` ではなく `postgresql://` を使用する
 
 2. **IPv4強制の追加パラメータ**
    ```
-   postgres://postgres.xxx:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=30
+   postgresql://postgres.xxx:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=30
    ```
 
 3. **Renderの環境変数設定**
@@ -193,6 +206,10 @@ connection to server at "db.miwoocobzxzuzhdkzsbg.supabase.co" (2406:da14:271:990
 4. **接続テスト**
    - デプロイ後、`https://your-app.onrender.com/test-db` にアクセス
    - 接続状況を確認
+
+5. **代替案（Python 3.13互換性問題がある場合）**
+   - `requirements_alt.txt` を `requirements.txt` に変更
+   - psycopg3を使用してより良い互換性を確保
 
 ### Environment Variables の正しい設定方法
 1. Render Dashboard でサービスを選択

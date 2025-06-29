@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import urllib.parse
 
 # 環境変数の読み込み
 base_path = Path(__file__).parents[1]  # backendディレクトリへのパス
@@ -14,13 +15,37 @@ DATABASE_URL = os.getenv('DATABASE_URL')
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL environment variable is not set")
 
-# IPv4を強制し、SSL設定を追加
-if DATABASE_URL and "?" in DATABASE_URL:
-    DATABASE_URL += "&options=-c%20default_transaction_isolation%3Dread_committed&sslmode=require"
-else:
-    DATABASE_URL += "?options=-c%20default_transaction_isolation%3Dread_committed&sslmode=require"
+# DATABASE_URLの詳細を安全に表示（デバッグ用）
+try:
+    parsed = urllib.parse.urlparse(DATABASE_URL)
+    print(f"URL Scheme: {parsed.scheme}")
+    print(f"Username: {parsed.username}")
+    print(f"Hostname: {parsed.hostname}")
+    print(f"Port: {parsed.port}")
+    print(f"Database: {parsed.path}")
+    print(f"Query params: {parsed.query}")
+    # パスワードは安全性のため表示しない
+    if parsed.password:
+        print(f"Password length: {len(parsed.password)} characters")
+        print(f"Password starts with: {parsed.password[:3]}...")
+    else:
+        print("Password: NOT SET")
+except Exception as e:
+    print(f"Error parsing DATABASE_URL: {e}")
 
-# PostgreSQLのエンジンを作成
+# postgres:// を postgresql:// に変換（SQLAlchemy 2.0対応）
+if DATABASE_URL.startswith('postgres://'):
+    DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    print("URL protocol converted from postgres:// to postgresql://")
+
+# SSL設定とその他のパラメータを追加
+if "?" in DATABASE_URL:
+    if "sslmode" not in DATABASE_URL:
+        DATABASE_URL += "&sslmode=require"
+else:
+    DATABASE_URL += "?sslmode=require"
+
+# PostgreSQLのエンジンを作成（明示的にpsycopg2を指定）
 engine = create_engine(
     DATABASE_URL,
     echo=True,
@@ -35,4 +60,4 @@ engine = create_engine(
 )
 
 print("Connecting to Supabase PostgreSQL...") 
-print(f"Database URL (masked): {DATABASE_URL[:30]}...") 
+print(f"Database URL (masked): {DATABASE_URL.split('@')[0]}@***")  # セキュリティのため接続先をマスク 
