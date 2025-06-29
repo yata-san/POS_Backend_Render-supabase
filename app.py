@@ -29,6 +29,13 @@ def index():
 @app.get("/test-db")
 def test_database():
     """データベース接続をテストするエンドポイント"""
+    if engine is None:
+        return {
+            "status": "error",
+            "message": "Database engine is not initialized",
+            "error_type": "ConfigurationError"
+        }
+    
     try:
         with engine.begin() as conn:
             result = conn.execute(text("SELECT 1 as test"))
@@ -49,6 +56,9 @@ def test_database():
 
 @app.get("/items")
 def read_one_item(code: str = Query(...)):
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    
     # prd_masterテーブルを参照
     result = crud.myselect(mymodels.PrdMaster, code, key_name="CODE")
     if not result:
@@ -71,6 +81,9 @@ class PurchaseRequest(BaseModel):
 
 @app.post("/purchase")
 def purchase(req: PurchaseRequest):
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Database service unavailable")
+    
     try:
         with engine.begin() as conn:
             # 1. trd_headerにINSERT (PostgreSQL用にRETURNINGを使用)

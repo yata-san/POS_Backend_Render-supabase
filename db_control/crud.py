@@ -7,6 +7,10 @@ import json
 from db_control.connect_supabase import engine
 
 def myselect(mymodel, key_value, key_name):
+    if engine is None:
+        print("Database engine is not available")
+        return None
+    
     Session = sessionmaker(bind=engine)
     session = Session()
     query = session.query(mymodel).filter(getattr(mymodel, key_name) == key_value)

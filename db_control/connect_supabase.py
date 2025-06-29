@@ -46,18 +46,24 @@ else:
     DATABASE_URL += "?sslmode=require"
 
 # PostgreSQLのエンジンを作成（明示的にpsycopg2を指定）
-engine = create_engine(
-    DATABASE_URL,
-    echo=True,
-    pool_pre_ping=True,
-    pool_recycle=300,  # 5分に短縮
-    pool_size=5,
-    max_overflow=0,
-    connect_args={
-        "sslmode": "require",
-        "connect_timeout": 30,
-    }
-)
+try:
+    engine = create_engine(
+        DATABASE_URL,
+        echo=True,
+        pool_pre_ping=True,
+        pool_recycle=300,  # 5分に短縮
+        pool_size=5,
+        max_overflow=0,
+        connect_args={
+            "sslmode": "require",
+            "connect_timeout": 30,
+        }
+    )
+    print("Database engine created successfully")
+except Exception as e:
+    print(f"Error creating database engine: {e}")
+    # エラーが発生してもアプリケーションを起動する
+    engine = None
 
 print("Connecting to Supabase PostgreSQL...") 
 print(f"Database URL (masked): {DATABASE_URL.split('@')[0]}@***")  # セキュリティのため接続先をマスク 
