@@ -161,6 +161,48 @@ uvicorn app:app --reload
 
 ## 5. トラブルシューティング
 
+### データベース接続エラー（重要）
+
+**症状**: `Network is unreachable` エラー、IPv6接続問題
+```
+connection to server at "db.miwoocobzxzuzhdkzsbg.supabase.co" (2406:da14:271:9903:99ac:87a9:1e53:a9d7), port 5432 failed: Network is unreachable
+```
+
+**原因**: 
+1. RenderでIPv6接続がサポートされていない
+2. 環境変数が正しく設定されていない
+3. Supabaseの接続設定に問題がある
+
+**対策**:
+1. **正しいDATABASE_URLの設定**
+   - Supabaseダッシュボード → Settings → Database → Connection Pooling
+   - **Transaction mode** を選択し、Connection stringをコピー
+   ```
+   postgres://postgres.xxx:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres
+   ```
+
+2. **IPv4強制の追加パラメータ**
+   ```
+   postgres://postgres.xxx:[PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require&connect_timeout=30
+   ```
+
+3. **Renderの環境変数設定**
+   - Render Dashboard → Your Service → Environment
+   - `DATABASE_URL` を追加し、上記の接続文字列を設定
+
+4. **接続テスト**
+   - デプロイ後、`https://your-app.onrender.com/test-db` にアクセス
+   - 接続状況を確認
+
+### Environment Variables の正しい設定方法
+1. Render Dashboard でサービスを選択
+2. "Environment" タブをクリック
+3. "Add Environment Variable" をクリック
+4. Key: `DATABASE_URL`
+5. Value: Supabaseから取得した接続文字列（パスワード付き）
+6. "Save Changes" をクリック
+7. サービスが自動的に再デプロイされる
+
 ### よくある問題
 - **接続エラー**: DATABASE_URL の形式を確認
 - **ポートエラー**: Renderでは自動的に `$PORT` 環境変数が設定される

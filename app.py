@@ -26,6 +26,27 @@ def index():
     return {"message": "FastAPI top page!"}
 
 
+@app.get("/test-db")
+def test_database():
+    """データベース接続をテストするエンドポイント"""
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(text("SELECT 1 as test"))
+            test_value = result.fetchone()[0]
+            return {
+                "status": "success", 
+                "message": "Database connection successful",
+                "test_query_result": test_value
+            }
+    except Exception as e:
+        print(f"Database connection test failed: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Database connection failed: {str(e)}",
+            "error_type": type(e).__name__
+        }
+
+
 @app.get("/items")
 def read_one_item(code: str = Query(...)):
     # prd_masterテーブルを参照
@@ -50,38 +71,43 @@ class PurchaseRequest(BaseModel):
 
 @app.post("/purchase")
 def purchase(req: PurchaseRequest):
-    with engine.begin() as conn:
-        # 1. trd_headerにINSERT (PostgreSQL用にRETURNINGを使用)
-        result = conn.execute(
-            text(
-                "INSERT INTO trd_header (total_amt, total_amt_ex_tax) VALUES (:total_amt, :total_amt_ex_tax) RETURNING trd_id"
-            ),
-            {"total_amt": req.total, "total_amt_ex_tax": req.subtotal}
-        )
-        trd_id = result.fetchone()[0]
-
-        # 2. trd_detailに商品ごとにINSERT
-        for idx, item in enumerate(req.items, start=1):
-            conn.execute(
+    try:
+        with engine.begin() as conn:
+            # 1. trd_headerにINSERT (PostgreSQL用にRETURNINGを使用)
+            result = conn.execute(
                 text(
-                    """
-                    INSERT INTO trd_detail
-                    (trd_id, dtl_id, prd_id, prd_code, prd_name, prd_price, quantity)
-                    VALUES
-                    (:trd_id, :dtl_id, :prd_id, :prd_code, :prd_name, :prd_price, :quantity)
-                    """
+                    "INSERT INTO trd_header (total_amt, total_amt_ex_tax) VALUES (:total_amt, :total_amt_ex_tax) RETURNING trd_id"
                 ),
-                {
-                    "trd_id": trd_id,
-                    "dtl_id": idx,
-                    "prd_id": item.PRD_ID,
-                    "prd_code": item.CODE,
-                    "prd_name": item.NAME,
-                    "prd_price": item.PRICE,
-                    "quantity": item.qty
-                }
+                {"total_amt": req.total, "total_amt_ex_tax": req.subtotal}
             )
-    return {"status": "success", "trd_id": trd_id}
+            trd_id = result.fetchone()[0]
+
+            # 2. trd_detailに商品ごとにINSERT
+            for idx, item in enumerate(req.items, start=1):
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO trd_detail
+                        (trd_id, dtl_id, prd_id, prd_code, prd_name, prd_price, quantity)
+                        VALUES
+                        (:trd_id, :dtl_id, :prd_id, :prd_code, :prd_name, :prd_price, :quantity)
+                        """
+                    ),
+                    {
+                        "trd_id": trd_id,
+                        "dtl_id": idx,
+                        "prd_id": item.PRD_ID,
+                        "prd_code": item.CODE,
+                        "prd_name": item.NAME,
+                        "prd_price": item.PRICE,
+                        "quantity": item.qty
+                    }
+                )
+        return {"status": "success", "trd_id": trd_id}
+    except Exception as e:
+        print(f"Database error: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=f"Database connection error: {str(e)}")
 
 # Render用のポート設定
 if __name__ == "__main__":
