@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import requests
 import json
 import os
+from datetime import datetime
 from db_control import crud, mymodels
 from typing import List
 from sqlalchemy import text
@@ -24,6 +25,34 @@ app.add_middleware(
 @app.get("/")
 def index():
     return {"message": "FastAPI top page!"}
+
+
+@app.get("/health")
+def health_check():
+    """アプリケーションの健全性をチェック"""
+    health_status = {
+        "status": "ok",
+        "database": "unknown",
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    # データベース接続チェック
+    if engine is None:
+        health_status["database"] = "disconnected"
+        health_status["status"] = "error"
+    else:
+        try:
+            with engine.begin() as conn:
+                result = conn.execute(text("SELECT 1 as test"))
+                test_value = result.fetchone()[0]
+                health_status["database"] = "connected"
+                health_status["database_test"] = test_value
+        except Exception as e:
+            health_status["database"] = "error"
+            health_status["database_error"] = str(e)
+            health_status["status"] = "error"
+    
+    return health_status
 
 
 @app.get("/test-db")
@@ -59,12 +88,30 @@ def read_one_item(code: str = Query(...)):
     if engine is None:
         raise HTTPException(status_code=503, detail="Database service unavailable")
     
-    # prd_masterテーブルを参照
-    result = crud.myselect(mymodels.PrdMaster, code, key_name="CODE")
-    if not result:
-        raise HTTPException(status_code=404, detail="Item not found")
-    result_obj = json.loads(result)
-    return result_obj[0] if result_obj else None
+    print(f"商品検索: コード={code}")
+    
+    try:
+        # prd_masterテーブルを参照
+        result = crud.myselect(mymodels.PrdMaster, code, key_name="CODE")
+        print(f"検索結果: {result}")
+        
+        if not result:
+            print(f"商品が見つかりません: コード={code}")
+            raise HTTPException(status_code=404, detail="Item not found")
+        
+        result_obj = json.loads(result)
+        if not result_obj:
+            print(f"結果が空です: コード={code}")
+            raise HTTPException(status_code=404, detail="Item not found")
+        
+        print(f"商品情報を返します: {result_obj[0]}")
+        return result_obj[0]
+    except json.JSONDecodeError as e:
+        print(f"JSON解析エラー: {e}")
+        raise HTTPException(status_code=500, detail="Data parsing error")
+    except Exception as e:
+        print(f"予期しないエラー: {e}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
 class CartItem(BaseModel):
