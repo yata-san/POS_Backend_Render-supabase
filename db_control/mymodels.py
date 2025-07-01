@@ -9,7 +9,24 @@ class Base(DeclarativeBase):
 
 class PrdMaster(Base):
     __tablename__ = 'prd_master'
-    PRD_ID: Mapped[int] = mapped_column(primary_key=True)
-    CODE: Mapped[str] = mapped_column(unique=True)
-    NAME: Mapped[str] = mapped_column()
-    PRICE: Mapped[int] = mapped_column()
+    prd_id: Mapped[int] = mapped_column('prd_id', primary_key=True)
+    code: Mapped[str] = mapped_column('code', unique=True)
+    name: Mapped[str] = mapped_column('name')
+    price: Mapped[int] = mapped_column('price')
+    
+    # 大文字でアクセスできるようにプロパティを追加
+    @property
+    def PRD_ID(self):
+        return self.prd_id
+    
+    @property
+    def CODE(self):
+        return self.code
+    
+    @property
+    def NAME(self):
+        return self.name
+    
+    @property
+    def PRICE(self):
+        return self.price

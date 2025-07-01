@@ -83,6 +83,58 @@ def test_database():
         }
 
 
+@app.get("/debug-products")
+def debug_products():
+    """商品マスタテーブルの内容を直接確認するエンドポイント"""
+    if engine is None:
+        return {"status": "error", "message": "Database engine is not initialized"}
+    
+    try:
+        with engine.begin() as conn:
+            # テーブル存在確認
+            table_check = conn.execute(text("""
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name LIKE '%prd%'
+            """))
+            tables = [row[0] for row in table_check.fetchall()]
+            
+            # カラム情報確認
+            if 'prd_master' in tables:
+                column_check = conn.execute(text("""
+                    SELECT column_name, data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'prd_master'
+                    ORDER BY ordinal_position
+                """))
+                columns = [{"name": row[0], "type": row[1]} for row in column_check.fetchall()]
+                
+                # データ確認
+                data_check = conn.execute(text("SELECT * FROM prd_master LIMIT 5"))
+                rows = [dict(row._mapping) for row in data_check.fetchall()]
+                
+                return {
+                    "status": "success",
+                    "tables": tables,
+                    "columns": columns,
+                    "sample_data": rows,
+                    "data_count": len(rows)
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": "prd_master table not found",
+                    "available_tables": tables
+                }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Database error: {str(e)}",
+            "error_type": type(e).__name__
+        }
+
+
 @app.get("/items")
 def read_one_item(code: str = Query(...)):
     if engine is None:
@@ -92,7 +144,7 @@ def read_one_item(code: str = Query(...)):
     
     try:
         # prd_masterテーブルを参照
-        result = crud.myselect(mymodels.PrdMaster, code, key_name="CODE")
+        result = crud.myselect(mymodels.PrdMaster, code, key_name="code")
         print(f"検索結果: {result}")
         
         if not result:
@@ -104,8 +156,17 @@ def read_one_item(code: str = Query(...)):
             print(f"結果が空です: コード={code}")
             raise HTTPException(status_code=404, detail="Item not found")
         
-        print(f"商品情報を返します: {result_obj[0]}")
-        return result_obj[0]
+        # フロントエンドが期待する大文字形式に変換
+        product_data = result_obj[0]
+        formatted_product = {
+            "PRD_ID": product_data.get("prd_id") or product_data.get("PRD_ID"),
+            "CODE": product_data.get("code") or product_data.get("CODE"),
+            "NAME": product_data.get("name") or product_data.get("NAME"),
+            "PRICE": product_data.get("price") or product_data.get("PRICE")
+        }
+        
+        print(f"商品情報を返します: {formatted_product}")
+        return formatted_product
     except json.JSONDecodeError as e:
         print(f"JSON解析エラー: {e}")
         raise HTTPException(status_code=500, detail="Data parsing error")
