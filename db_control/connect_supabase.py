@@ -12,13 +12,16 @@ load_dotenv(dotenv_path=env_path)
 # Supabaseデータベース接続情報
 DATABASE_URL = os.getenv('DATABASE_URL')
 
+# engine変数を最初にNoneで初期化
+engine = None
+
 if not DATABASE_URL:
     print("ERROR: DATABASE_URL environment variable is not set")
     print("Available environment variables:")
     for key in os.environ:
         if 'DATABASE' in key.upper() or 'SUPABASE' in key.upper():
             print(f"  {key}: {'*' * min(len(os.environ[key]), 10)}...")
-    engine = None
+else:
     # DATABASE_URLの詳細を安全に表示（デバッグ用）
     try:
         parsed = urllib.parse.urlparse(DATABASE_URL)
